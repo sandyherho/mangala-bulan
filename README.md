@@ -276,8 +276,8 @@ $$Da = \frac{V_{max} L^2}{D_{O_2} K_m}$$
 
 ## Authors
 
-- **Sandy H. S. Herho** - Numerical implementation and solver development
-- **Gandhi Napitupulu** - Mathematical formulation and validation
+- **Sandy H. S. Herho** 
+- **Gandhi Napitupulu**
 
 ## License
 
