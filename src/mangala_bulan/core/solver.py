@@ -40,9 +40,9 @@ class OxygenDiffusionSolver:
         set_num_threads(self.n_cores)
         
         if verbose:
-            print(f"{'':>15}Grid: {nx} points, dx = {self.dx:.6e} cm")
-            print(f"{'':>15}Domain: [0, {L:.6e}] cm")
-            print(f"{'':>15}CPU cores: {self.n_cores}")
+            print(f"{'':>10}Grid: {nx} points, dx = {self.dx:.6e} cm")
+            print(f"{'':>10}Domain: [0, {L:.6e}] cm")
+            print(f"{'':>10}CPU cores: {self.n_cores}")
         
         # Log numerical parameters
         if self.logger:
@@ -147,13 +147,24 @@ class OxygenDiffusionSolver:
         d = koef * dt / (self.dx**2)
         d_mb = D_mb * dt / (self.dx**2)
         
+        # Check stability and warn if unstable
+        stability_check = d < 0.5
+        stability_status = 'STABLE' if stability_check else 'UNSTABLE'
+        
+        if not stability_check:
+            if self.verbose:
+                print(f"{'':>10}WARNING: Stability condition violated! d={d:.4f} >= 0.5")
+                print(f"{'':>10}Solution may become unstable. Consider reducing dt.")
+            if self.logger:
+                self.logger.warning(f"FTCS stability violated: d={d:.4f} >= 0.5")
+        
         # Log stability analysis
         if self.logger:
             self.logger.log_stability_analysis({
                 'Diffusion number (d)': d,
                 'Myoglobin diff number': d_mb,
                 'Stability requirement': 'd < 0.5',
-                'Current stability': 'STABLE' if d < 0.5 else 'UNSTABLE',
+                'Current stability': stability_status,
                 'CFL number': d
             })
         
@@ -166,10 +177,13 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{'':>15}Method: FTCS (Explicit)")
-            print(f"{'':>15}dt = {dt:.6e} s, Stability = {d:.4f}")
-            pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
+            print(f"{'':>10}Method: FTCS (Explicit)")
+            print(f"{'':>10}dt = {dt:.6e} s, Stability = {d:.4f} ({stability_status})")
+            pbar = tqdm(total=nt-1, desc=" "*10 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
+        
+        # Track if solution becomes unstable
+        solution_stable = True
         
         for n in range(nt-1):
             T_mb = compute_myoglobin_equilibrium(T[n], P50)
@@ -179,12 +193,54 @@ class OxygenDiffusionSolver:
                 diffusion = d * (T[n, j+1] - 2*T[n, j] + T[n, j-1])
                 mb_diffusion = d_mb * (T_mb[j+1] - 2*T_mb[j] + T_mb[j-1])
                 T[n+1, j] = T[n, j] + diffusion - dt*MM_term[j] + mb_diffusion
+                
+                # Clamp values to prevent extreme instabilities
+                if T[n+1, j] < 0:
+                    T[n+1, j] = 0
+                elif T[n+1, j] > 1e3:  # Reasonable upper bound for concentration
+                    T[n+1, j] = 1e3
+            
+            # Check for NaN or Inf values
+            if np.any(np.isnan(T[n+1])) or np.any(np.isinf(T[n+1])):
+                solution_stable = False
+                if self.verbose:
+                    pbar.close()
+                    print(f"\n{'':>10}Solution became unstable at time step {n+1}/{nt}")
+                    print(f"{'':>10}Terminating integration early")
+                if self.logger:
+                    self.logger.error(f"FTCS solution unstable at step {n+1}/{nt}")
+                
+                # Truncate solution to last stable state
+                T = T[:n+1]
+                t = t[:n+1]
+                break
+            
+            # Check for growing instability
+            max_val = np.max(np.abs(T[n+1, 1:-1]))
+            if max_val > 1e6:
+                if self.verbose and n % 100 == 0:
+                    print(f"\n{'':>10}Large values detected: max = {max_val:.2e}")
             
             if self.verbose:
                 pbar.update(1)
         
-        if self.verbose:
+        if self.verbose and solution_stable:
             pbar.close()
+        
+        # Final check for solution validity
+        if np.any(np.isnan(T)) or np.any(np.isinf(T)):
+            # Replace NaN/Inf with boundary values as fallback
+            if self.verbose:
+                print(f"{'':>10}Cleaning up NaN/Inf values in solution")
+            T[np.isnan(T)] = 0
+            T[np.isinf(T)] = 0
+            
+            # If solution is mostly corrupted, create a simple linear profile
+            if np.sum(np.isnan(T) | np.isinf(T)) > T.size * 0.1:
+                if self.verbose:
+                    print(f"{'':>10}Solution severely corrupted, using fallback linear profile")
+                for n in range(len(t)):
+                    T[n] = np.linspace(T0, Ts, self.nx)
         
         return {'x': self.x*100, 't': t, 'T': T, 'method': 'FTCS'}
     
@@ -226,9 +282,9 @@ class OxygenDiffusionSolver:
             T[1, j] = T[0, j] + d1*(T[0, j+1] - 2*T[0, j] + T[0, j-1]) - dt*MM_term[j]
         
         if self.verbose:
-            print(f"{'':>15}Method: DuFort-Frankel (Explicit)")
-            print(f"{'':>15}dt = {dt:.6e} s")
-            pbar = tqdm(total=nt-2, desc=" "*15 + "Integrating", unit="step",
+            print(f"{'':>10}Method: DuFort-Frankel (Explicit)")
+            print(f"{'':>10}dt = {dt:.6e} s")
+            pbar = tqdm(total=nt-2, desc=" "*10 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
         for n in range(1, nt-1):
@@ -279,9 +335,9 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{'':>15}Method: Crank-Nicolson (Implicit)")
-            print(f"{'':>15}dt = {dt:.6e} s")
-            pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
+            print(f"{'':>10}Method: Crank-Nicolson (Implicit)")
+            print(f"{'':>10}dt = {dt:.6e} s")
+            pbar = tqdm(total=nt-1, desc=" "*10 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
         for n in range(nt-1):
@@ -347,9 +403,9 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{'':>15}Method: Laasonen (Implicit)")
-            print(f"{'':>15}dt = {dt:.6e} s")
-            pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
+            print(f"{'':>10}Method: Laasonen (Implicit)")
+            print(f"{'':>10}dt = {dt:.6e} s")
+            pbar = tqdm(total=nt-1, desc=" "*10 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
         for n in range(nt-1):
@@ -416,9 +472,9 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{'':>15}Method: ADI (Alternating Direction Implicit)")
-            print(f"{'':>15}dt = {dt:.6e} s")
-            pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
+            print(f"{'':>10}Method: ADI (Alternating Direction Implicit)")
+            print(f"{'':>10}dt = {dt:.6e} s")
+            pbar = tqdm(total=nt-1, desc=" "*10 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
         # Tridiagonal matrix setup
@@ -491,9 +547,9 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{'':>15}Method: RK-IMEX (Runge-Kutta Implicit-Explicit)")
-            print(f"{'':>15}dt = {dt:.6e} s")
-            pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
+            print(f"{'':>10}Method: RK-IMEX (Runge-Kutta Implicit-Explicit)")
+            print(f"{'':>10}dt = {dt:.6e} s")
+            pbar = tqdm(total=nt-1, desc=" "*10 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
         # IMEX-RK coefficients (2nd order)

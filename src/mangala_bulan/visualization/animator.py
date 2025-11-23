@@ -139,13 +139,13 @@ class Animator:
             return lines + [gradient_fill, time_text, title_text, method_text, 
                           params_display, progress_bar]
         
-        print(f"{'':>15}Rendering GIF...")
+        print(f"{'':>10}Rendering GIF...")
         anim = animation.FuncAnimation(fig, animate, frames=n_frames,
                                      interval=1000/config.get('fps', 30), blit=False)
         
         writer = animation.PillowWriter(fps=config.get('fps', 30))
         
-        with tqdm(total=n_frames, desc=" "*15 + "Progress", unit="frame",
+        with tqdm(total=n_frames, desc=" "*10 + "Progress", unit="frame",
                  bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.0f}/{total:.0f} [{elapsed}<{remaining}]') as pbar:
             def progress_callback(current_frame, total_frames):
                 pbar.n = current_frame + 1
@@ -154,4 +154,4 @@ class Animator:
                      progress_callback=progress_callback)
         
         plt.close(fig)
-        print(f"{'':>15}✓ Animation saved: {filepath}")
+        print(f"{'':>10}✓ Animation saved: {filepath}")
