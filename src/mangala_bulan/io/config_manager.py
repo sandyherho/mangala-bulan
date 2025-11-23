@@ -26,6 +26,13 @@ class ConfigManager:
         if value.lower() in ['true', 'false']:
             return value.lower() == 'true'
         try:
+            # Try to evaluate mathematical expressions
+            if '/' in value or '*' in value or '+' in value or '-' in value:
+                try:
+                    return eval(value)
+                except:
+                    pass
+            # Standard parsing
             if '.' in value or 'e' in value.lower():
                 return float(value)
             else:
