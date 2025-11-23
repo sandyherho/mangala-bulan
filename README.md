@@ -4,7 +4,7 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mangala-bulan.svg)](https://pypi.org/project/mangala-bulan/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Downloads](https://pepy.tech/badge/mangala-bulan)](https://pepy.tech/project/mangala-bulan)
+
 
 [![NumPy](https://img.shields.io/badge/numpy-%E2%89%A51.20-013243.svg?logo=numpy&logoColor=white)](https://numpy.org/)
 [![SciPy](https://img.shields.io/badge/scipy-%E2%89%A51.7-8CAAE6.svg?logo=scipy&logoColor=white)](https://scipy.org/)
