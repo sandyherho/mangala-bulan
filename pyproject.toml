@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "mangala-bulan"
-version = "0.0.1"
-description = "Oxygen diffusion solver with Michaelis-Menten kinetics and myoglobin facilitation"
+version = "0.0.2"
+description = "1D idealized Oxygen diffusion solver with Michaelis-Menten kinetics and myoglobin facilitation"
 authors = ["Sandy H. S. Herho", "Gandhi Napitupulu"]
 license = "MIT"
 readme = "README.md"

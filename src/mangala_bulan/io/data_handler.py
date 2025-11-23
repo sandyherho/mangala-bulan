@@ -50,7 +50,7 @@ class DataHandler:
             
             nc.created = datetime.now().isoformat()
             nc.software = "mangala-bulan"
-            nc.version = "0.0.1"
+            nc.version = "0.0.2"
             nc.title = f"Oxygen Diffusion: {config.get('scenario_name', 'unknown')}"
     
     @staticmethod

@@ -9,7 +9,7 @@ from .utils.logger import SimulationLogger
 def print_header():
     print("\n" + "="*80)
     print(" "*15 + "mangala-bulan: 1D Idealized Oxygen Diffusion Solver")
-    print(" "*30 + "Version 0.0.1")
+    print(" "*30 + "Version 0.0.2")
     print("="*80)
     print(" "*15 + "Oxygen Diffusion with Michaelis-Menten & Myoglobin")
     print(" "*18 + "Authors: Sandy H. S. Herho, Gandhi Napitupulu")
@@ -54,7 +54,7 @@ def main():
     parser = argparse.ArgumentParser(description='mangala-bulan 1D Oxygen Diffusion Solver')
     parser.add_argument('config', nargs='?', help='Config file path')
     parser.add_argument('--all', '-a', action='store_true', help='Run all configs')
-    parser.add_argument('--method', '-m', choices=['ftcs','dufort','crank','laasonen','adi','rkimex'])
+    parser.add_argument('--method', '-m', choices=['crank','laasonen','adi','rkimex'])
     parser.add_argument('--quiet', '-q', action='store_true')
     
     args = parser.parse_args()

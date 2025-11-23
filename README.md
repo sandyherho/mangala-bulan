@@ -19,7 +19,7 @@ A high-performance numerical solver for 1D idealized oxygen diffusion in biologi
 
 ## Key Features
 
-- **Six numerical methods**: FTCS, DuFort-Frankel, Crank-Nicolson, Laasonen, ADI, and RK-IMEX
+- **Four numerical methods**: Crank-Nicolson, Laasonen, ADI, and RK-IMEX
 - **High performance**: Numba JIT compilation with automatic parallelization
 - **Flexible output formats**: NetCDF4, CSV, and animated visualizations
 - **Stability monitoring**: Real-time detection and handling of numerical instabilities
@@ -75,34 +75,24 @@ $$C_{Mb} = \frac{C_{O_2} \cdot P_{50}}{P_{50} + C_{O_2}}$$
 
 ## Numerical Methods
 
-The solver implements six finite difference schemes:
+The solver implements four finite difference schemes:
 
-### 1. **FTCS** (Forward-Time Central-Space)
-- Explicit scheme: $C_i^{n+1} = C_i^n + d(C_{i+1}^n - 2C_i^n + C_{i-1}^n) - \Delta t \cdot R_i^n$
-- Stability: Requires $d = \frac{D_{O_2} \Delta t}{\Delta x^2} < 0.5$
-- Order: $O(\Delta t, \Delta x^2)$
-
-### 2. **DuFort-Frankel**
-- Explicit three-level scheme: $\frac{C_i^{n+1} - C_i^{n-1}}{2\Delta t} = D_{O_2} \frac{C_{i+1}^n - (C_i^{n+1} + C_i^{n-1}) + C_{i-1}^n}{\Delta x^2}$
-- Stability: Unconditionally stable
-- Order: $O(\Delta t^2, \Delta x^2, (\Delta t/\Delta x)^2)$
-
-### 3. **Crank-Nicolson**
+### 1. **Crank-Nicolson**
 - Semi-implicit scheme: $\frac{C_i^{n+1} - C_i^n}{\Delta t} = \frac{D_{O_2}}{2} \left[\delta_x^2 C_i^{n+1} + \delta_x^2 C_i^n\right]$
 - Stability: Unconditionally stable
 - Order: $O(\Delta t^2, \Delta x^2)$
 
-### 4. **Laasonen** (Fully Implicit)
+### 2. **Laasonen** (Fully Implicit)
 - Implicit scheme: $C_i^{n+1} = C_i^n + d(C_{i+1}^{n+1} - 2C_i^{n+1} + C_{i-1}^{n+1})$
 - Stability: Unconditionally stable
 - Order: $O(\Delta t, \Delta x^2)$
 
-### 5. **ADI** (Alternating Direction Implicit)
+### 3. **ADI** (Alternating Direction Implicit)
 - Tridiagonal matrix solver with sparse LU decomposition
 - Stability: Unconditionally stable
 - Order: $O(\Delta t^2, \Delta x^2)$
 
-### 6. **RK-IMEX** (Runge-Kutta Implicit-Explicit)
+### 4. **RK-IMEX** (Runge-Kutta Implicit-Explicit)
 - Second-order IMEX scheme treating stiff diffusion implicitly
 - Stability: L-stable for stiff terms
 - Order: $O(\Delta t^2, \Delta x^2)$
@@ -116,7 +106,6 @@ The solver implements six finite difference schemes:
 ### Install from PyPI
 
 The simplest way to install `mangala-bulan` is via pip:
-
 ```bash
 pip install mangala-bulan
 ```
@@ -124,7 +113,6 @@ pip install mangala-bulan
 ### Development Installation
 
 For development or to get the latest unreleased features:
-
 ```bash
 git clone https://github.com/sandyherho/mangala-bulan.git
 cd mangala-bulan
@@ -132,25 +120,22 @@ pip install -e .
 ```
 
 ### Install with Poetry (for contributors)
-
 ```bash
-git clone https://github.com/username/mangala-bulan.git
+git clone https://github.com/sandyherho/mangala-bulan.git
 cd mangala-bulan
 poetry install --with dev
 ```
 
 ### Verify Installation
-
 ```python
 import mangala_bulan
 print(mangala_bulan.__version__)
-# Output: 0.0.1
+# Output: 0.0.2
 ```
 
 ## Quick Start
 
 ### 1. Basic Usage
-
 ```python
 from mangala_bulan import OxygenDiffusionSolver
 
@@ -194,14 +179,14 @@ mangala-bulan configs/crank_scenario1.txt
 
 Configuration files use simple key-value pairs:
 ```ini
-scenario_name = FTCS Method - Scenario 1
-method = ftcs
+scenario_name = Crank-Nicolson Method - Scenario 1
+method = crank
 T0 = 70.0          # Initial O2 concentration [mg/ml]
 Ts = 10.0          # Boundary O2 concentration [mg/ml]
 koef = 5.5e-7      # Diffusion coefficient [cm²/s]
 L = 1.0e-3         # Domain length [cm]
 ts = 1.0           # Simulation time [s]
-dt = 1.0/2000      # Time step [s]
+dt = 1.0/300       # Time step [s]
 nx = 51            # Grid points
 V_max = 2.0e-4     # Max consumption rate [mg/(ml·s)]
 K_m = 1.0          # Michaelis constant [mg/ml]
@@ -228,19 +213,7 @@ Complete solution data with metadata:
 - **Memory Optimization**: Streaming I/O for large datasets
 - **Stability Monitoring**: Real-time detection and handling of numerical instabilities
 
-## Numerical Stability
-
-### Stability Criteria
-
-For explicit schemes (FTCS):
-$$d = \frac{D_{O_2} \Delta t}{\Delta x^2} < 0.5$$
-
-For the given default parameters:
-- Critical time step: $\Delta t_{crit} = \frac{0.5 \Delta x^2}{D_{O_2}} \approx 3.64 \times 10^{-4}$ s
-- Recommended: $\Delta t < 3 \times 10^{-4}$ s for FTCS
-
 ## Project Structure
-
 ```
 mangala-bulan/
 ├── src/mangala_bulan/
@@ -254,9 +227,10 @@ mangala-bulan/
 │   └── visualization/     # Plotting and animation
 │       └── animator.py
 ├── configs/               # Scenario configurations
-│   ├── ftcs_*.txt
 │   ├── crank_*.txt
-│   └── ...
+│   ├── laasonen_*.txt
+│   ├── adi_*.txt
+│   └── rkimex_*.txt
 ├── outputs/              # Simulation results
 └── logs/                 # Computation logs
 ```
@@ -290,14 +264,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you use mangala-bulan in your research, please cite:
 
 ### Software Citation
-
 ```bibtex
-@software{mangala_bulan_2024,
+@software{mangala_bulan_2025,
   title = {{\texttt{mangala-bulan}: 1D Idealized Oxygen Diffusion Solver}},
   author = {Herho, Sandy H. S. and Napitupulu, Gandhi},
   year = {2025},
   month = {12},
-  version = {0.0.1},
+  version = {0.0.2},
   publisher = {PyPI},
   url = {https://github.com/sandyherho/mangala-bulan},
   license = {MIT}
