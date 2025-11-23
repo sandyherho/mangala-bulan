@@ -2,6 +2,7 @@ import numpy as np
 from typing import Dict, Any, Optional
 from tqdm import tqdm
 import os
+import time
 from numba import njit, prange, set_num_threads
 from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
@@ -39,12 +40,41 @@ class OxygenDiffusionSolver:
         set_num_threads(self.n_cores)
         
         if verbose:
-            print(f"{' '*15}Grid: {nx} points, dx = {self.dx:.6e} cm")
-            print(f"{' '*15}Domain: [0, {L:.6e}] cm")
-            print(f"{' '*15}CPU cores: {self.n_cores}")
+            print(f"{'':>15}Grid: {nx} points, dx = {self.dx:.6e} cm")
+            print(f"{'':>15}Domain: [0, {L:.6e}] cm")
+            print(f"{'':>15}CPU cores: {self.n_cores}")
+        
+        # Log numerical parameters
+        if self.logger:
+            self.logger.log_numerical_params({
+                'Grid points (nx)': nx,
+                'Grid spacing (dx)': self.dx,
+                'Domain length (L)': L,
+                'CPU cores': self.n_cores
+            })
     
     def solve(self, config: Dict[str, Any]):
+        # Log physical parameters
+        if self.logger:
+            self.logger.log_physics_params({
+                'Initial O2 (T0)': config.get('T0', 70.0),
+                'Boundary O2 (Ts)': config.get('Ts', 10.0),
+                'Diffusion coef (D)': config.get('koef', 5.5e-7),
+                'V_max': config.get('V_max', 2e-4),
+                'K_m': config.get('K_m', 1.0),
+                'Myoglobin diff (D_mb)': config.get('D_mb', 3e-8),
+                'P50': config.get('P50', 2.0),
+                'Time step (dt)': config.get('dt', 5e-4),
+                'Total time (ts)': config.get('ts', 1.0)
+            })
+        
         method = config.get('method', 'ftcs')
+        
+        # Start integration phase
+        if self.logger:
+            self.logger.start_phase('integration')
+        
+        start_time = time.time()
         
         if method == 'ftcs':
             result = self._solve_ftcs(config)
@@ -61,18 +91,45 @@ class OxygenDiffusionSolver:
         else:
             raise ValueError(f"Unknown method: {method}")
         
+        integration_time = time.time() - start_time
+        
+        # End integration phase with details
+        if self.logger:
+            nt = len(result['t'])
+            self.logger.end_phase('integration', {
+                'Method': method,
+                'Time steps': nt,
+                'Integration time': f'{integration_time:.6f} s',
+                'Steps per second': f'{nt/integration_time:.2f}'
+            })
+        
         # Save outputs
         scenario = config.get('scenario_name', 'simulation')
         clean_name = scenario.replace(' ', '_').replace('-', '_').lower()
         
+        # NetCDF output
         if config.get('save_netcdf', True):
+            if self.logger:
+                self.logger.start_phase('netcdf_output')
             DataHandler.save_netcdf(f"{clean_name}.nc", result, config)
+            if self.logger:
+                self.logger.end_phase('netcdf_output')
         
+        # CSV output
         if config.get('save_csv', True):
+            if self.logger:
+                self.logger.start_phase('csv_output')
             DataHandler.save_csv(f"{clean_name}.csv", result, config)
+            if self.logger:
+                self.logger.end_phase('csv_output')
         
+        # Animation
         if config.get('save_animation', True):
+            if self.logger:
+                self.logger.start_phase('animation')
             Animator.create_gif(result, f"{clean_name}.gif", config)
+            if self.logger:
+                self.logger.end_phase('animation')
         
         return result
     
@@ -90,6 +147,16 @@ class OxygenDiffusionSolver:
         d = koef * dt / (self.dx**2)
         d_mb = D_mb * dt / (self.dx**2)
         
+        # Log stability analysis
+        if self.logger:
+            self.logger.log_stability_analysis({
+                'Diffusion number (d)': d,
+                'Myoglobin diff number': d_mb,
+                'Stability requirement': 'd < 0.5',
+                'Current stability': 'STABLE' if d < 0.5 else 'UNSTABLE',
+                'CFL number': d
+            })
+        
         nt = int(ts / dt) + 1
         t = np.linspace(0, ts, nt)
         
@@ -99,8 +166,8 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{' '*15}Method: FTCS (Explicit)")
-            print(f"{' '*15}dt = {dt:.6e} s, Stability = {d:.4f}")
+            print(f"{'':>15}Method: FTCS (Explicit)")
+            print(f"{'':>15}dt = {dt:.6e} s, Stability = {d:.4f}")
             pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
@@ -135,6 +202,14 @@ class OxygenDiffusionSolver:
         d = 2 * koef * dt / (self.dx**2)
         d_mb = 2 * D_mb * dt / (self.dx**2)
         
+        # Log stability analysis
+        if self.logger:
+            self.logger.log_stability_analysis({
+                'Diffusion number (d)': d/2,
+                'Method stability': 'Unconditionally stable',
+                'Numerical diffusion': 'Present due to time-centering'
+            })
+        
         nt = int(ts / dt) + 1
         t = np.linspace(0, ts, nt)
         
@@ -151,8 +226,8 @@ class OxygenDiffusionSolver:
             T[1, j] = T[0, j] + d1*(T[0, j+1] - 2*T[0, j] + T[0, j-1]) - dt*MM_term[j]
         
         if self.verbose:
-            print(f"{' '*15}Method: DuFort-Frankel (Explicit)")
-            print(f"{' '*15}dt = {dt:.6e} s")
+            print(f"{'':>15}Method: DuFort-Frankel (Explicit)")
+            print(f"{'':>15}dt = {dt:.6e} s")
             pbar = tqdm(total=nt-2, desc=" "*15 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
@@ -187,6 +262,14 @@ class OxygenDiffusionSolver:
         d = koef * dt / (self.dx**2)
         d_mb = D_mb * dt / (self.dx**2)
         
+        # Log stability analysis
+        if self.logger:
+            self.logger.log_stability_analysis({
+                'Diffusion number (d)': d,
+                'Method stability': 'Unconditionally stable',
+                'Method order': 'Second-order in space and time'
+            })
+        
         nt = int(ts / dt) + 1
         t = np.linspace(0, ts, nt)
         
@@ -196,8 +279,8 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{' '*15}Method: Crank-Nicolson (Implicit)")
-            print(f"{' '*15}dt = {dt:.6e} s")
+            print(f"{'':>15}Method: Crank-Nicolson (Implicit)")
+            print(f"{'':>15}dt = {dt:.6e} s")
             pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
@@ -247,6 +330,14 @@ class OxygenDiffusionSolver:
         d = koef * dt / (self.dx**2)
         d_mb = D_mb * dt / (self.dx**2)
         
+        # Log stability analysis
+        if self.logger:
+            self.logger.log_stability_analysis({
+                'Diffusion number (d)': d,
+                'Method stability': 'Unconditionally stable',
+                'Method type': 'Fully implicit'
+            })
+        
         nt = int(ts / dt) + 1
         t = np.linspace(0, ts, nt)
         
@@ -256,8 +347,8 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{' '*15}Method: Laasonen (Implicit)")
-            print(f"{' '*15}dt = {dt:.6e} s")
+            print(f"{'':>15}Method: Laasonen (Implicit)")
+            print(f"{'':>15}dt = {dt:.6e} s")
             pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
@@ -307,6 +398,15 @@ class OxygenDiffusionSolver:
         d = koef * dt / (self.dx**2)
         d_mb = D_mb * dt / (self.dx**2)
         
+        # Log stability analysis
+        if self.logger:
+            self.logger.log_stability_analysis({
+                'Diffusion number (d)': d,
+                'Method stability': 'Unconditionally stable',
+                'Method type': 'Alternating Direction Implicit',
+                'Matrix solver': 'Direct sparse solver'
+            })
+        
         nt = int(ts / dt) + 1
         t = np.linspace(0, ts, nt)
         
@@ -316,8 +416,8 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{' '*15}Method: ADI (Alternating Direction Implicit)")
-            print(f"{' '*15}dt = {dt:.6e} s")
+            print(f"{'':>15}Method: ADI (Alternating Direction Implicit)")
+            print(f"{'':>15}dt = {dt:.6e} s")
             pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         
@@ -372,6 +472,16 @@ class OxygenDiffusionSolver:
         d = koef * dt / (self.dx**2)
         d_mb = D_mb * dt / (self.dx**2)
         
+        # Log stability analysis
+        if self.logger:
+            self.logger.log_stability_analysis({
+                'Diffusion number (d)': d,
+                'Method type': 'Runge-Kutta IMEX',
+                'Method order': 'Second-order',
+                'Stiff term treatment': 'Implicit',
+                'Non-stiff term treatment': 'Explicit'
+            })
+        
         nt = int(ts / dt) + 1
         t = np.linspace(0, ts, nt)
         
@@ -381,8 +491,8 @@ class OxygenDiffusionSolver:
         T[0, 1:-1] = 0
         
         if self.verbose:
-            print(f"{' '*15}Method: RK-IMEX (Runge-Kutta Implicit-Explicit)")
-            print(f"{' '*15}dt = {dt:.6e} s")
+            print(f"{'':>15}Method: RK-IMEX (Runge-Kutta Implicit-Explicit)")
+            print(f"{'':>15}dt = {dt:.6e} s")
             pbar = tqdm(total=nt-1, desc=" "*15 + "Integrating", unit="step",
                        bar_format='{desc}: {percentage:3.0f}%|{bar}| {n:.2f}/{total:.2f} [{elapsed}<{remaining}]')
         

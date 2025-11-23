@@ -8,7 +8,7 @@ from .utils.logger import SimulationLogger
 
 def print_header():
     print("\n" + "="*80)
-    print(" "*15 + "mangala-bulan 1D Idealized Oxygen Diffusion Solver")
+    print(" "*15 + "mangala-bulan: 1D Idealized Oxygen Diffusion Solver")
     print(" "*30 + "Version 0.0.1")
     print("="*80)
     print(" "*15 + "Oxygen Diffusion with Michaelis-Menten & Myoglobin")
@@ -20,11 +20,11 @@ def run_scenario(config_path: str, verbose: bool = True):
     scenario = config.get('scenario_name', 'simulation')
     
     if verbose:
-        print(f"\n{' '*10}{'='*60}")
-        print(f"{' '*10}SCENARIO: {scenario}")
-        print(f"{' '*10}{'='*60}")
+        print(f"\n{'':>10}{'='*60}")
+        print(f"{'':>10}SCENARIO: {scenario}")
+        print(f"{'':>10}{'='*60}")
     
-    logger = SimulationLogger(scenario.replace(' ', '_'), "logs", verbose)
+    logger = SimulationLogger(scenario.replace(' ', '_').replace('-', '_').lower(), "logs", verbose)
     
     try:
         solver = OxygenDiffusionSolver(
@@ -38,14 +38,14 @@ def run_scenario(config_path: str, verbose: bool = True):
         solver.solve(config)
         
         if verbose:
-            print(f"\n{' '*10}{'='*60}")
-            print(f"{' '*10}SIMULATION COMPLETED SUCCESSFULLY")
-            print(f"{' '*10}{'='*60}\n")
+            print(f"\n{'':>10}{'='*60}")
+            print(f"{'':>10}SIMULATION COMPLETED SUCCESSFULLY")
+            print(f"{'':>10}{'='*60}\n")
     
     except Exception as e:
         logger.error(f"Simulation failed: {str(e)}")
         if verbose:
-            print(f"\n{' '*10}SIMULATION FAILED: {str(e)}\n")
+            print(f"\n{'':>10}SIMULATION FAILED: {str(e)}\n")
         raise
     finally:
         logger.finalize()
